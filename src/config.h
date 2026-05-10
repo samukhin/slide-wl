@@ -45,11 +45,11 @@ static const char *term[] = { "foot", NULL };
 static const char *menu[] = { "wofi", "--show", "drun", NULL };
 
 
-static const char *vol_up[]   = { "osd-handler", "vol-up", NULL };
-static const char *vol_down[] = { "osd-handler", "vol-down", NULL };
-static const char *vol_mute[] = { "osd-handler", "vol-mute", NULL };
-static const char *bri_up[]   = { "osd-handler", "bri-up", NULL };
-static const char *bri_down[] = { "osd-handler", "bri-down", NULL };
+static const char *vol_up[]   = { "swayosd-client", "--output-volume", "raise", NULL };
+static const char *vol_down[] = { "swayosd-client", "--output-volume", "lower", NULL };
+static const char *vol_mute[] = { "swayosd-client", "--output-volume", "mute-toggle", NULL };
+static const char *bri_up[]   = { "swayosd-client", "--brightness", "raise", NULL };
+static const char *bri_down[] = { "swayosd-client", "--brightness", "lower", NULL };
 
 // lmao screenshots don't work (nvm they do now)
 static const char *shot[] = { "sh", "-c", "grim -g \"$(slurp)\" ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png", NULL };
