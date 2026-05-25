@@ -829,7 +829,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 
     struct slide_toplevel *t;
     wl_list_for_each(t, &server->toplevels, link) {
-        if (t->anim.active && !t->fullscreen)
+        if (!t->fullscreen)
             win_reposition(t);
     }
 
