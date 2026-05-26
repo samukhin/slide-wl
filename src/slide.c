@@ -1450,6 +1450,8 @@ int main(int argc, char *argv[]) {
     wl_signal_add(&server.xdg_decoration_mgr->events.new_toplevel_decoration,
         &server.new_xdg_decoration);
 
+    wlr_server_decoration_manager_set_default_mode(wlr_server_decoration_manager_create(server.wl_display), WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+
     // cursor
     server.cursor     = wlr_cursor_create();
     wlr_cursor_attach_output_layout(server.cursor, server.output_layout);

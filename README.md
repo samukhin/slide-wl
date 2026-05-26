@@ -136,8 +136,6 @@ The `-s` flag runs a command at startup (useful for launching a bar or autostart
 
 ## Known Issue(s)
 
-- Firefox doesn't like zooming very much 
-
 ## Thanks
 
 - [TinyWL](https://gitlab.freedesktop.org/wlroots/wlroots/-/tree/master/tinywl) for teaching me how to build small Wayland compositors
