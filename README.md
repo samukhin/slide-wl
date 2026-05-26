@@ -132,6 +132,7 @@ The `-s` flag runs a command at startup (useful for launching a bar or autostart
 - [x] "Begone, CSDs!"
 - [x] Add animations 
 - [ ] add blur (maybe 👀)  
+- [ ] Add multimonitor support
 
 
 ## Known Issue(s)
