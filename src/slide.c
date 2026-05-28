@@ -15,6 +15,8 @@ static struct slide_server *G = NULL;
 static void focus_toplevel(struct slide_toplevel *toplevel);
 static void reproject_all(struct slide_server *server);
 static void viewport_follow(struct slide_toplevel *c);
+static void popup_reposition(struct slide_popup *p);
+
 
 // include config.h thingy
 #include "config.h"
@@ -176,6 +178,12 @@ static void scene_buffer_apply_zoom(struct wlr_scene_buffer *buffer,
     float zoom = *(float *)data;
     struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(buffer);
     if (!ss) return;
+    struct wlr_subsurface *sub = wlr_subsurface_try_from_wlr_surface(ss->surface);
+    if (sub) {
+        wlr_scene_node_set_position(&buffer->node.parent->node,
+            (int32_t)roundf(sub->current.x * zoom),
+            (int32_t)roundf(sub->current.y * zoom));
+    }
     int32_t w = ss->surface->current.width;
     int32_t h = ss->surface->current.height;
     wlr_scene_buffer_set_dest_size(buffer,
@@ -187,6 +195,11 @@ static void scene_buffer_clear_zoom(struct wlr_scene_buffer *buffer,
                                      int32_t sx, int32_t sy, void *data) {
     struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(buffer);
     if (!ss) return;
+    struct wlr_subsurface *sub = wlr_subsurface_try_from_wlr_surface(ss->surface);
+    if (sub) {
+        wlr_scene_node_set_position(&buffer->node.parent->node,
+            sub->current.x, sub->current.y);
+    }
     wlr_scene_buffer_set_dest_size(buffer, 0, 0);
 }
 
@@ -257,6 +270,10 @@ static void win_reposition(struct slide_toplevel *t) {
         to_screen_x(t->server, t->cx) - (int)(geo.x * eff_zoom) + cx_off,
         to_screen_y(t->server, t->cy) - (int)(geo.y * eff_zoom) + cy_off);
     apply_visual_zoom(t, eff_zoom);
+
+    struct slide_popup *p;
+    wl_list_for_each(p, &t->popups, link)
+        popup_reposition(p);
 }
 
 static void reproject_all(struct slide_server *server) {
@@ -596,6 +613,12 @@ static struct slide_toplevel *toplevel_at(struct slide_server *server,
     if (!ss) return NULL;
 
     *surface = ss->surface;
+
+    if (sb->dst_width > 0 && sb->dst_height > 0) {
+        *sx = *sx * (double)ss->surface->current.width  / (double)sb->dst_width;
+        *sy = *sy * (double)ss->surface->current.height / (double)sb->dst_height;
+    }
+
     struct wlr_scene_tree *tree = node->parent;
     while (tree && !tree->node.data) tree = tree->node.parent;
     return tree ? tree->node.data : NULL;
@@ -1279,6 +1302,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     t->scene_tree   = wlr_scene_xdg_surface_create(server->toplevel_tree,
                           xdg_toplevel->base);
     t->scene_tree->node.data = t;
+    wl_list_init(&t->popups);
     xdg_toplevel->base->data = t->scene_tree;
 
     t->map.notify = xdg_toplevel_map;
@@ -1298,14 +1322,28 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
 // xdg popup
 
+static void popup_reposition(struct slide_popup *p) {
+    struct slide_server *s = p->toplevel->server;
+    double px, py;
+    wlr_xdg_popup_get_position(p->xdg_popup, &px, &py);
+    if (s->zoom == 1.0f)
+        wlr_scene_node_set_position(&p->popup_tree->node,
+            (int)round(px), (int)round(py));
+    else
+        wlr_scene_node_set_position(&p->popup_tree->node,
+            (int)round(px * s->zoom), (int)round(py * s->zoom));
+}
+
 static void xdg_popup_commit(struct wl_listener *listener, void *data) {
     struct slide_popup *p = wl_container_of(listener, p, commit);
     if (p->xdg_popup->base->initial_commit)
         wlr_xdg_surface_schedule_configure(p->xdg_popup->base);
+    popup_reposition(p);
 }
 
 static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
     struct slide_popup *p = wl_container_of(listener, p, destroy);
+    wl_list_remove(&p->link);
     wl_list_remove(&p->commit.link);
     wl_list_remove(&p->destroy.link);
     free(p);
@@ -1319,13 +1357,33 @@ static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
     struct wlr_xdg_surface *parent =
         wlr_xdg_surface_try_from_wlr_surface(xdg_popup->parent);
     assert(parent);
-    struct wlr_scene_tree *parent_tree = parent->data;
-    xdg_popup->base->data = wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
+
+    // Walk parent chain to find the owning toplevel
+    struct slide_toplevel *toplevel = NULL;
+    struct wlr_xdg_surface *ps = parent;
+    while (ps) {
+        if (ps->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
+            toplevel = ((struct wlr_scene_tree *)ps->data)->node.data;
+            break;
+        }
+        ps = wlr_xdg_surface_try_from_wlr_surface(ps->popup->parent);
+    }
+    assert(toplevel);
+    p->toplevel = toplevel;
+
+    struct wlr_scene_tree *popup_tree =
+        wlr_scene_xdg_surface_create(parent->data, xdg_popup->base);
+    xdg_popup->base->data = popup_tree;
+    p->popup_tree = popup_tree;
+
+    wl_list_insert(&toplevel->popups, &p->link);
 
     p->commit.notify = xdg_popup_commit;
     wl_signal_add(&xdg_popup->base->surface->events.commit, &p->commit);
     p->destroy.notify = xdg_popup_destroy;
     wl_signal_add(&xdg_popup->events.destroy, &p->destroy);
+
+    popup_reposition(p);
 }
 
 

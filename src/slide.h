@@ -194,6 +194,7 @@ struct slide_toplevel {
     struct wlr_scene_tree *snapshot_tree; // last-frame snapshot for close animation
     int          snap_w, snap_h; // screen-space pixel size at snapshot time
 
+    struct wl_list          popups;      // list of slide_popup::link
     struct wl_listener map;
     struct wl_listener unmap;
     struct wl_listener commit;
@@ -203,9 +204,12 @@ struct slide_toplevel {
 };
 
 struct slide_popup {
-    struct wlr_xdg_popup  *xdg_popup;
-    struct wl_listener     commit;
-    struct wl_listener     destroy;
+    struct wlr_xdg_popup    *xdg_popup;
+    struct slide_toplevel   *toplevel;
+    struct wlr_scene_tree   *popup_tree;
+    struct wl_list           link;
+    struct wl_listener       commit;
+    struct wl_listener       destroy;
 };
 
 struct slide_keyboard {
